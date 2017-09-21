@@ -162,6 +162,96 @@ QGtkWindow::QGtkWindow(QWindow *window)
         QGtkCourierObject::instance = new QGtkCourierObject(QCoreApplication::instance());
 }
 
+static void zoom_cb(GtkGestureZoom *pt, gdouble scale, gpointer platformWindow)
+{
+    QGtkWindow *pw = static_cast<QGtkWindow*>(platformWindow);
+    gdouble x;
+    gdouble y;
+
+    GdkEventSequence *seq = gtk_gesture_get_last_updated_sequence(GTK_GESTURE(pt));
+    gtk_gesture_get_point(GTK_GESTURE(pt), seq, &x, &y);
+    QPointF contentPoint = QPointF(x, y);
+    const GdkEvent *ev = gtk_gesture_get_last_event(GTK_GESTURE(pt), seq);
+    guint32 ts = gdk_event_get_time(ev);
+
+    qWarning() << "Zoom on " << pw->window() << contentPoint << scale << ts;
+    pw->zoom(contentPoint, scale, ts);
+}
+
+static void begin_zoom_cb(GtkGesture *pt, GdkEventSequence*, gpointer platformWindow)
+{
+    QGtkWindow *pw = static_cast<QGtkWindow*>(platformWindow);
+    gdouble x;
+    gdouble y;
+    GdkEventSequence *seq = gtk_gesture_get_last_updated_sequence(GTK_GESTURE(pt));
+    gtk_gesture_get_point(GTK_GESTURE(pt), seq, &x, &y);
+    QPointF contentPoint = QPointF(x, y);
+    const GdkEvent *ev = gtk_gesture_get_last_event(GTK_GESTURE(pt), seq);
+    guint32 ts = gdk_event_get_time(ev);
+    gtk_gesture_set_sequence_state(GTK_GESTURE(pt), seq, GTK_EVENT_SEQUENCE_CLAIMED);
+
+    qWarning() << "Begin zoom " << pw->window() << contentPoint << ts;
+    pw->beginZoom(contentPoint, ts);
+}
+
+static void end_zoom_cb(GtkGesture *pt, GdkEventSequence*, gpointer platformWindow)
+{
+    QGtkWindow *pw = static_cast<QGtkWindow*>(platformWindow);
+    gdouble x;
+    gdouble y;
+    GdkEventSequence *seq = gtk_gesture_get_last_updated_sequence(GTK_GESTURE(pt));
+    gtk_gesture_get_point(GTK_GESTURE(pt), seq, &x, &y);
+    QPointF contentPoint = QPointF(x, y);
+    const GdkEvent *ev = gtk_gesture_get_last_event(GTK_GESTURE(pt), seq);
+    guint32 ts = gdk_event_get_time(ev);
+
+    qWarning() << "End zoom " << pw->window() << contentPoint << ts;
+    pw->endZoom(contentPoint, ts);
+}
+
+static void cancel_zoom_cb(GtkGesture *pt, GdkEventSequence*, gpointer platformWindow)
+{
+    QGtkWindow *pw = static_cast<QGtkWindow*>(platformWindow);
+    gdouble x;
+    gdouble y;
+    GdkEventSequence *seq = gtk_gesture_get_last_updated_sequence(GTK_GESTURE(pt));
+    gtk_gesture_get_point(GTK_GESTURE(pt), seq, &x, &y);
+    QPointF contentPoint = QPointF(x, y);
+    const GdkEvent *ev = gtk_gesture_get_last_event(GTK_GESTURE(pt), seq);
+    guint32 ts = gdk_event_get_time(ev);
+
+    qWarning() << "Cancel zoom " << pw->window() << contentPoint << ts;
+    pw->endZoom(contentPoint, ts);
+}
+
+void QGtkWindow::beginZoom(QPointF &contentPoint, guint32 ts)
+{
+    m_initialZoomSet = false;
+    QWindowSystemInterface::handleGestureEvent(window(), ts, Qt::BeginNativeGesture, contentPoint, contentPoint);
+}
+
+void QGtkWindow::zoom(QPointF &contentPoint, double scale, guint32 ts)
+{
+    if (!m_initialZoomSet) {
+        m_initialZoomSet = true;
+        m_initialZoom = scale;
+    }
+    double modScale = (scale - m_initialZoom) / m_initialZoom;
+    //if (scale < m_initialZoom) {
+    //    modScale = (1.0 - ((m_initialZoom - scale) / m_initialZoom));
+    //} else {
+    //    modScale = (((m_initialZoom - scale) / m_initialZoom));
+    //}
+    m_initialZoom = scale;
+    qWarning() << "Scale from " << m_initialZoom << " to " << scale << " is " << modScale;
+    QWindowSystemInterface::handleGestureEventWithRealValue(window(), ts, Qt::ZoomNativeGesture, modScale, contentPoint, contentPoint);
+}
+
+void QGtkWindow::endZoom(QPointF &contentPoint, guint32 ts)
+{
+    QWindowSystemInterface::handleGestureEvent(window(), ts, Qt::EndNativeGesture, contentPoint, contentPoint);
+}
+
 void QGtkWindow::create(Qt::WindowType windowType)
 {
     if (m_window) {
@@ -240,6 +330,13 @@ void QGtkWindow::create(Qt::WindowType windowType)
     g_signal_connect(m_content.get(), "scroll-event", G_CALLBACK(scroll_cb), this);
     g_signal_connect(m_content.get(), "leave-notify-event", G_CALLBACK(leave_content_notify_cb), this);
     gtk_widget_set_can_focus(m_content.get(), true);
+
+    GtkGesture *zoom = gtk_gesture_zoom_new(m_content.get());
+    gtk_event_controller_set_propagation_phase(GTK_EVENT_CONTROLLER(zoom), GTK_PHASE_CAPTURE);
+    g_signal_connect(zoom, "scale-changed", G_CALLBACK(zoom_cb), this);
+    g_signal_connect(zoom, "begin", G_CALLBACK(begin_zoom_cb), this);
+    g_signal_connect(zoom, "cancel", G_CALLBACK(cancel_zoom_cb), this);
+    g_signal_connect(zoom, "end", G_CALLBACK(end_zoom_cb), this);
 
     m_touchDevice = new QTouchDevice;
     m_touchDevice->setType(QTouchDevice::TouchScreen); // ### use GdkDevice or not?

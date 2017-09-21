@@ -38,6 +38,8 @@ Q_LOGGING_CATEGORY(lcMouseMotion, "qt.qpa.gtk.mouse.motion");
 
 bool QGtkWindow::onButtonPress(GdkEvent *event)
 {
+    qWarning() << "PRESS?";
+    return false;
     TRACE_EVENT0("input", "QGtkWindow::onButtonPress");
     TRACE_EVENT_ASYNC_BEGIN0("input", "QGtkWindow::mouseDown", this);
     GdkEventButton *ev = (GdkEventButton*)event;

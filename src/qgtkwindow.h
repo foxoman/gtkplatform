@@ -119,6 +119,10 @@ public:
     QGtkRefPtr<GtkMenuBar> gtkMenuBar() const;
     QGtkRefPtr<GtkWidget> gtkWindow() const;
 
+    void beginZoom(QPointF &contentPoint, guint32 ts);
+    void zoom(QPointF &contentPoint, double scale, guint32 ts);
+    void endZoom(QPointF &contentPoint, guint32 ts);
+
 private:
     QGtkRefPtr<GtkWidget> m_window;
     QGtkRefPtr<GtkMenuBar> m_menubar;
@@ -139,6 +143,9 @@ private:
 
     static void drawCallback(GtkWidget *, cairo_t *cr, gpointer platformWindow);
     static gboolean windowTickCallback(GtkWidget*, GdkFrameClock *, gpointer platformWindow);
+
+    bool m_initialZoomSet = false;
+    double m_initialZoom;
 };
 
 class QGtkCourierObject : public QObject

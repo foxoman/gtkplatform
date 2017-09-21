@@ -39,6 +39,7 @@ Q_LOGGING_CATEGORY(lcTouchUpdate, "qt.qpa.gtk.touch.update");
 
 bool QGtkWindow::onTouchEvent(GdkEvent *event)
 {
+    return false;
     TRACE_EVENT0("input", "QGtkWindow::onTouchEvent");
     GdkEventTouch *ev = (GdkEventTouch*)event;
 
